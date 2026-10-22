@@ -1,7 +1,7 @@
 {
-  "name": "CamAttend Offline Manager",
+  "name": "CamAttend CM Edition",
   "short_name": "CamAttend",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#047857",
   "theme_color": "#047857",
