@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CamAttend - Offline Attendance Manager</title>
+    <title>CamAttend - Offline Attendance Manager (CM Edition)</title>
     <!-- Web App Manifest Link -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#047857">
@@ -40,6 +40,11 @@
                 <button onclick="toggleLanguage()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-emerald-600 flex items-center space-x-1 cursor-pointer">
                     <i class="fa-solid fa-language"></i>
                     <span id="currentLangLabel">FR</span>
+                </button>
+
+                <button onclick="openEmployeeReportModal()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-emerald-600 cursor-pointer">
+                    <i class="fa-solid fa-chart-pie text-sky-300"></i>
+                    <span class="hidden md:inline">Individual Analytics</span>
                 </button>
 
                 <button onclick="openPayrollModal()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-emerald-600 cursor-pointer">
@@ -79,13 +84,8 @@
                         <input type="time" id="policyTime" value="08:00" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" onchange="calculateStats()">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-500 mb-1" data-i18n="policyGrace">Grace Period</label>
-                        <select id="policyGrace" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" onchange="calculateStats()">
-                            <option value="0">No Grace Period</option>
-                            <option value="5">5 Minutes</option>
-                            <option value="10">10 Minutes</option>
-                            <option value="15" selected>15 Minutes</option>
-                        </select>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Grace Period (Mins)</label>
+                        <input type="number" id="policyGrace" value="15" min="0" max="180" placeholder="e.g. 15" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" oninput="calculateStats()">
                     </div>
                 </div>
             </div>
@@ -95,10 +95,32 @@
                     <i class="fa-solid fa-pen-to-square text-emerald-600 mr-2"></i> <span data-i18n="formTitle">Daily Attendance Log</span>
                 </h2>
                 <form id="attendanceForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
-                    <div>
+                    
+                    <!-- Searchable Employee Select Dropdown -->
+                    <div class="relative">
                         <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="formEmployee">Select Employee *</label>
-                        <select id="formEmployee" required class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none">
-                            <option value="" disabled selected>-- Choose staff member --</option>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                            <input type="text" id="employeeSearchInput" autocomplete="off" placeholder="Type to search employee..." class="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none" oninput="filterEmployeeSuggestions()" onfocus="showEmployeeSuggestions()">
+                            <button type="button" onclick="clearEmployeeSelection()" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs hidden" id="clearEmpBtn">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" id="formEmployee" required>
+
+                        <!-- Auto-suggest Suggestions Dropdown -->
+                        <div id="employeeSuggestions" class="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden divide-y divide-slate-100">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Attendance Status Selection -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Attendance Status *</label>
+                        <select id="formStatusSelect" required class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" onchange="handleStatusChange()">
+                            <option value="Present" selected>Present (Clocked In)</option>
+                            <option value="Absent">Absent (Unexcused / Out)</option>
+                            <option value="Permission">Approved Leave / Permission</option>
                         </select>
                     </div>
 
@@ -115,13 +137,15 @@
 
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="formPermission">Permission / Leave Exception</label>
-                        <select id="formPermission" class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500" onchange="toggleTimeField()">
-                            <option value="None" selected>None (Standard Clock-In)</option>
+                        <select id="formPermission" class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500" onchange="togglePermissionCustomField()">
+                            <option value="None" selected>None (Standard)</option>
                             <option value="Casual Leave">Casual Permission (Exceptionnelle)</option>
                             <option value="Sick Leave">Sick Leave (Maladie)</option>
                             <option value="Annual Leave">Annual Paid Leave (Congé Payé)</option>
                             <option value="Maternity Leave">Maternity / Paternity Leave</option>
+                            <option value="CUSTOM">Custom / Other Reason...</option>
                         </select>
+                        <input type="text" id="formPermissionCustom" placeholder="Type custom permission type..." class="w-full mt-2 bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 hidden">
                     </div>
 
                     <div>
@@ -142,22 +166,28 @@
 
         <!-- RIGHT COLUMN: Analytics, Backup Controls & Table -->
         <div class="lg:col-span-2 space-y-6">
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
-                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statPresent">Present</span>
-                    <span class="text-2xl font-black text-emerald-600 mt-1" id="statPresent">0</span>
+            
+            <!-- Summary KPI Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div class="bg-white p-3.5 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statPresent">Present</span>
+                    <span class="text-xl font-black text-emerald-600 mt-1" id="statPresent">0</span>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
-                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statLate">Late</span>
-                    <span class="text-2xl font-black text-amber-500 mt-1" id="statLate">0</span>
+                <div class="bg-white p-3.5 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statLate">Late</span>
+                    <span class="text-xl font-black text-amber-500 mt-1" id="statLate">0</span>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
-                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statPermission">Permissions</span>
-                    <span class="text-2xl font-black text-blue-500 mt-1" id="statPermission">0</span>
+                <div class="bg-white p-3.5 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Absent</span>
+                    <span class="text-xl font-black text-rose-600 mt-1" id="statAbsent">0</span>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
-                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statMinutes">Total Late Min.</span>
-                    <span class="text-2xl font-black text-rose-500 mt-1" id="statMinutes">0m</span>
+                <div class="bg-white p-3.5 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statPermission">Permissions</span>
+                    <span class="text-xl font-black text-blue-500 mt-1" id="statPermission">0</span>
+                </div>
+                <div class="bg-white p-3.5 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between col-span-2 sm:col-span-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statMinutes">Late Mins</span>
+                    <span class="text-xl font-black text-rose-500 mt-1" id="statMinutes">0m</span>
                 </div>
             </div>
 
@@ -168,26 +198,26 @@
                     </h3>
                     
                     <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="exportJSONBackup()" title="Download JSON file backup" class="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                        <button onclick="exportJSONBackup()" title="Download JSON file backup" class="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-xs font-semibold py-1.5 px-2.5 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer">
                             <i class="fa-solid fa-file-export"></i>
-                            <span>Export JSON</span>
+                            <span>JSON</span>
                         </button>
-                        <button onclick="exportCSVData()" title="Download CSV spreadsheet" class="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                        <button onclick="exportCSVData()" title="Download CSV spreadsheet" class="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs font-semibold py-1.5 px-2.5 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer">
                             <i class="fa-solid fa-file-csv"></i>
-                            <span>Export CSV</span>
+                            <span>CSV</span>
                         </button>
                         
                         <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importJSONBackup(event)">
-                        <button onclick="document.getElementById('importFileInput').click()" title="Load JSON backup" class="bg-amber-100 text-amber-800 hover:bg-amber-200 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                        <button onclick="document.getElementById('importFileInput').click()" title="Load JSON backup" class="bg-amber-100 text-amber-800 hover:bg-amber-200 text-xs font-semibold py-1.5 px-2.5 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer">
                             <i class="fa-solid fa-file-import"></i>
-                            <span>Restore JSON</span>
+                            <span>Restore</span>
                         </button>
                         
-                        <button onclick="shareToWhatsApp()" class="bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                        <button onclick="shareToWhatsApp()" class="bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold py-1.5 px-2.5 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer">
                             <i class="fa-brands fa-whatsapp"></i>
                             <span class="hidden sm:inline">WhatsApp</span>
                         </button>
-                        <button onclick="confirmClearData()" class="bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-700 text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors cursor-pointer">
+                        <button onclick="confirmClearData()" class="bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-700 text-xs font-semibold py-1.5 px-2.5 rounded-lg transition-colors cursor-pointer">
                             Clear
                         </button>
                     </div>
@@ -203,6 +233,7 @@
                         <option value="All" data-i18n="filterAll">All Statuses</option>
                         <option value="Present" data-i18n="filterPresent">Present Only</option>
                         <option value="Late" data-i18n="filterLate">Late Only</option>
+                        <option value="Absent">Absent Only</option>
                         <option value="Permission" data-i18n="filterPermission">On Approved Permission</option>
                     </select>
 
@@ -241,6 +272,29 @@
             </div>
         </div>
     </main>
+
+    <!-- Modal: Individual Employee Profile & Visual Analytics Report -->
+    <div id="employeeReportModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-chart-pie text-sky-500 mr-2"></i> Individual Staff Performance Card
+                </h3>
+                <button onclick="closeEmployeeReportModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Select Employee to Inspect</label>
+                <select id="reportStaffSelect" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" onchange="renderIndividualReport()">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+
+            <div id="reportCardContainer" class="space-y-4">
+                <!-- Visual Card populated dynamically -->
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: View/Edit Private Note -->
     <div id="noteModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
@@ -294,8 +348,8 @@
                     <thead class="bg-slate-100 font-semibold text-slate-600 border-b border-slate-200">
                         <tr>
                             <th class="p-2.5">Staff Member</th>
-                            <th class="p-2.5">Late Count</th>
-                            <th class="p-2.5">Total Mins</th>
+                            <th class="p-2.5">Late</th>
+                            <th class="p-2.5">Absent</th>
                             <th class="p-2.5 text-right">Deduction (FCFA)</th>
                         </tr>
                     </thead>
@@ -312,43 +366,56 @@
         </div>
     </div>
 
-    <!-- Modal: Public Holidays Reference -->
+    <!-- Modal: Public Holidays Reference & Custom Input -->
     <div id="holidaysModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
         <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
             <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 class="font-bold text-slate-800 text-sm flex items-center">
-                    <i class="fa-solid fa-flag text-emerald-600 mr-2"></i> Official Cameroon Holidays (2026)
+                    <i class="fa-solid fa-flag text-emerald-600 mr-2"></i> Official & Custom Holidays
                 </h3>
                 <button onclick="closeHolidaysModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
-            <div class="max-h-64 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 text-xs">
-                <div class="p-2.5 flex justify-between"><span>New Year's Day (Jour de l'An)</span><span class="font-mono font-bold text-slate-600">Jan 1</span></div>
-                <div class="p-2.5 flex justify-between bg-emerald-50/50"><span>Youth Day (Fête de la Jeunesse)</span><span class="font-mono font-bold text-emerald-700">Feb 11</span></div>
-                <div class="p-2.5 flex justify-between"><span>Good Friday (Vendredi Saint)</span><span class="font-mono font-bold text-slate-600">Apr 3</span></div>
-                <div class="p-2.5 flex justify-between"><span>Labor Day (Fête du Travail)</span><span class="font-mono font-bold text-slate-600">May 1</span></div>
-                <div class="p-2.5 flex justify-between bg-emerald-50/50"><span>National Day (Fête Nationale)</span><span class="font-mono font-bold text-emerald-700">May 20</span></div>
-                <div class="p-2.5 flex justify-between"><span>Ascension Day (Ascension)</span><span class="font-mono font-bold text-slate-600">May 14</span></div>
-                <div class="p-2.5 flex justify-between"><span>Assumption Day (Assomption)</span><span class="font-mono font-bold text-slate-600">Aug 15</span></div>
-                <div class="p-2.5 flex justify-between"><span>Christmas Day (Noël)</span><span class="font-mono font-bold text-slate-600">Dec 25</span></div>
+            <form id="addHolidayForm" onsubmit="handleAddCustomHoliday(event)" class="flex gap-2">
+                <input type="text" id="newHolidayName" placeholder="Holiday Title (e.g., Pont Décrété)" required class="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                <input type="date" id="newHolidayDate" required class="bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 rounded-lg text-xs transition-colors cursor-pointer">Add</button>
+            </form>
+
+            <div class="max-h-64 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 text-xs" id="holidaysListContainer">
+                <!-- Holidays populated dynamically -->
             </div>
         </div>
     </div>
 
-    <!-- Modal: Staff Management -->
+    <!-- Modal: Staff Management (Multi-Field Support) -->
     <div id="staffModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
-        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 space-y-4">
             <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                 <h3 class="font-bold text-slate-800 text-sm flex items-center">
-                    <i class="fa-solid fa-users-gear text-emerald-600 mr-2"></i> Employee Directory
+                    <i class="fa-solid fa-users-gear text-emerald-600 mr-2"></i> Staff Directory & Roles
                 </h3>
                 <button onclick="closeStaffModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
-            <form id="addStaffForm" onsubmit="handleAddStaff(event)" class="flex gap-2">
-                <input type="text" id="newStaffName" placeholder="Staff Name" required class="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
-                <input type="text" id="newStaffDept" placeholder="Dept." class="w-28 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
-                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 rounded-lg text-xs transition-colors cursor-pointer">Add</button>
+            <form id="addStaffForm" onsubmit="handleAddStaff(event)" class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div class="col-span-2">
+                    <input type="text" id="newStaffName" placeholder="Full Name *" required class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <input type="text" id="newStaffRole" placeholder="Job Title / Role (e.g., Accountant)" class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <input type="text" id="newStaffDept" placeholder="Department (e.g., Finance)" class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <input type="number" id="newStaffRate" placeholder="Daily Base Rate (FCFA)" class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium p-2 rounded-lg text-xs transition-colors cursor-pointer">
+                        <i class="fa-solid fa-user-plus mr-1"></i> Add Employee
+                    </button>
+                </div>
             </form>
 
             <div class="max-h-60 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100" id="staffListContainer">
@@ -371,22 +438,32 @@
 
     <script>
         const defaultEmployees = [
-            { id: 1, name: "Amadou Bello", dept: "Operations" },
-            { id: 2, name: "Chantal Ngo", dept: "Finance" },
-            { id: 3, name: "Fabiola Kamga", dept: "Human Resources" },
-            { id: 4, name: "Jean-Pierre Tchakounté", dept: "IT Support" },
-            { id: 5, name: "Miracle Ndip", dept: "Marketing" }
+            { id: 1, name: "Amadou Bello", role: "Operations Supervisor", dept: "Operations", dailyRate: 7500 },
+            { id: 2, name: "Chantal Ngo", role: "Senior Accountant", dept: "Finance", dailyRate: 10000 },
+            { id: 3, name: "Fabiola Kamga", role: "HR Manager", dept: "Human Resources", dailyRate: 9000 },
+            { id: 4, name: "Jean-Pierre Tchakounté", role: "IT Administrator", dept: "IT Support", dailyRate: 8500 },
+            { id: 5, name: "Miracle Ndip", role: "Marketing Specialist", dept: "Marketing", dailyRate: 7000 }
+        ];
+
+        const defaultHolidays = [
+            { title: "New Year's Day (Jour de l'An)", date: "2026-01-01", isOfficial: true },
+            { title: "Youth Day (Fête de la Jeunesse)", date: "2026-02-11", isOfficial: true },
+            { title: "Good Friday (Vendredi Saint)", date: "2026-04-03", isOfficial: true },
+            { title: "Labor Day (Fête du Travail)", date: "2026-05-01", isOfficial: true },
+            { title: "Ascension Day (Ascension)", date: "2026-05-14", isOfficial: true },
+            { title: "National Day (Fête Nationale)", date: "2026-05-20", isOfficial: true },
+            { title: "Assumption Day (Assomption)", date: "2026-08-15", isOfficial: true },
+            { title: "Christmas Day (Noël)", date: "2026-12-25", isOfficial: true }
         ];
 
         const i18n = {
             en: {
-                langSubHeader: "Cameroon Edition PWA",
+                langSubHeader: "CM Edition",
                 navPayroll: "FCFA Payroll",
                 navHolidays: "Public Holidays",
                 navStaff: "Manage Staff",
                 policyTitle: "Shift Policies",
                 policyTime: "Shift Start Time",
-                policyGrace: "Grace Period",
                 formTitle: "Daily Attendance Log",
                 formEmployee: "Select Employee *",
                 formDate: "Date *",
@@ -414,13 +491,12 @@
                 noteModalTitle: "Private Supervisor Note"
             },
             fr: {
-                langSubHeader: "Édition Cameroun PWA",
+                langSubHeader: "Édition Cameroun",
                 navPayroll: "Retenues FCFA",
                 navHolidays: "Jours Fériés",
                 navStaff: "Personnel",
                 policyTitle: "Politique de Présence",
                 policyTime: "Heure de Début",
-                policyGrace: "Période de Grâce",
                 formTitle: "Registre de Présence",
                 formEmployee: "Sélectionner l'Employé *",
                 formDate: "Date *",
@@ -452,13 +528,21 @@
         let currentLang = 'en';
         let employees = JSON.parse(localStorage.getItem('camattend_staff')) || defaultEmployees;
         let attendanceLogs = JSON.parse(localStorage.getItem('camattend_db')) || [];
+        let holidays = JSON.parse(localStorage.getItem('camattend_holidays')) || defaultHolidays;
 
         window.onload = function() {
             document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
-            populateEmployeeDropdown();
             startClock();
             renderLedger();
+            renderHolidaysList();
             registerPWA();
+            
+            // Close suggestion dropdown on outside click
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#employeeSearchInput') && !e.target.closest('#employeeSuggestions')) {
+                    document.getElementById('employeeSuggestions').classList.add('hidden');
+                }
+            });
         };
 
         function toggleLanguage() {
@@ -496,22 +580,71 @@
             }, 1000);
         }
 
-        function populateEmployeeDropdown() {
-            const empDropdown = document.getElementById('formEmployee');
-            empDropdown.innerHTML = `<option value="" disabled selected>-- ${currentLang === 'en' ? 'Choose staff member' : 'Choisir un employé'} --</option>`;
-            
-            employees.sort((a,b) => a.name.localeCompare(b.name)).forEach(emp => {
-                let opt = document.createElement('option');
-                opt.value = emp.name;
-                opt.textContent = `${emp.name} (${emp.dept || 'General'})`;
-                empDropdown.appendChild(opt);
-            });
+        // --- SEARCHABLE EMPLOYEE COMBOBOX LOGIC ---
+        function showEmployeeSuggestions() {
+            filterEmployeeSuggestions();
         }
 
-        function toggleTimeField() {
-            const permType = document.getElementById('formPermission').value;
+        function filterEmployeeSuggestions() {
+            const query = document.getElementById('employeeSearchInput').value.toLowerCase();
+            const suggestionsContainer = document.getElementById('employeeSuggestions');
+            suggestionsContainer.innerHTML = '';
+
+            const filtered = employees.filter(emp => 
+                emp.name.toLowerCase().includes(query) || 
+                (emp.role && emp.role.toLowerCase().includes(query)) ||
+                (emp.dept && emp.dept.toLowerCase().includes(query))
+            );
+
+            if (filtered.length === 0) {
+                suggestionsContainer.innerHTML = `<div class="p-3 text-xs text-slate-400 italic text-center">No employee found matching "${query}"</div>`;
+            } else {
+                filtered.forEach(emp => {
+                    const item = document.createElement('div');
+                    item.className = "p-2.5 hover:bg-emerald-50 cursor-pointer flex justify-between items-center text-xs transition-colors";
+                    item.innerHTML = `
+                        <div>
+                            <div class="font-semibold text-slate-800">${emp.name}</div>
+                            <div class="text-[10px] text-slate-400">${emp.role || 'Staff'} • ${emp.dept || 'General'}</div>
+                        </div>
+                        ${emp.dailyRate ? `<span class="text-[10px] font-mono text-emerald-700 bg-emerald-100/60 px-1.5 py-0.5 rounded">${emp.dailyRate.toLocaleString()} FCFA/day</span>` : ''}
+                    `;
+                    item.onclick = function() {
+                        selectEmployee(emp);
+                    };
+                    suggestionsContainer.appendChild(item);
+                });
+            }
+
+            suggestionsContainer.classList.remove('hidden');
+        }
+
+        function selectEmployee(emp) {
+            document.getElementById('formEmployee').value = emp.name;
+            document.getElementById('employeeSearchInput').value = `${emp.name} (${emp.role || emp.dept || 'Staff'})`;
+            document.getElementById('employeeSuggestions').classList.add('hidden');
+            document.getElementById('clearEmpBtn').classList.remove('hidden');
+        }
+
+        function clearEmployeeSelection() {
+            document.getElementById('formEmployee').value = '';
+            document.getElementById('employeeSearchInput').value = '';
+            document.getElementById('clearEmpBtn').classList.add('hidden');
+            document.getElementById('employeeSearchInput').focus();
+        }
+
+        // --- FORM TOGGLES ---
+        function handleStatusChange() {
+            const status = document.getElementById('formStatusSelect').value;
             const timeInput = document.getElementById('formTime');
-            if (permType !== 'None') {
+            const permSelect = document.getElementById('formPermission');
+
+            if (status === 'Absent') {
+                timeInput.value = '';
+                timeInput.disabled = true;
+                timeInput.classList.add('bg-slate-100', 'cursor-not-allowed');
+                permSelect.value = 'None';
+            } else if (status === 'Permission') {
                 timeInput.value = '';
                 timeInput.disabled = true;
                 timeInput.classList.add('bg-slate-100', 'cursor-not-allowed');
@@ -521,22 +654,41 @@
             }
         }
 
+        function togglePermissionCustomField() {
+            const permVal = document.getElementById('formPermission').value;
+            const customInput = document.getElementById('formPermissionCustom');
+            if (permVal === 'CUSTOM') {
+                customInput.classList.remove('hidden');
+            } else {
+                customInput.classList.add('hidden');
+            }
+        }
+
         function handleFormSubmit(event) {
             event.preventDefault();
             const employee = document.getElementById('formEmployee').value;
+            if (!employee) {
+                showToast("Please select a valid employee from the suggestions", true);
+                return;
+            }
+
             const date = document.getElementById('formDate').value;
             const timeIn = document.getElementById('formTime').value;
-            const permission = document.getElementById('formPermission').value;
+            const statusSelect = document.getElementById('formStatusSelect').value;
+            
+            let permission = document.getElementById('formPermission').value;
+            if (permission === 'CUSTOM') {
+                permission = document.getElementById('formPermissionCustom').value.trim() || 'Custom Leave';
+            }
+
             const note = document.getElementById('formNote').value.trim();
 
-            let finalStatus = "Present";
+            let finalStatus = statusSelect;
             let lateMinutes = 0;
 
-            if (permission !== "None") {
-                finalStatus = "Permission";
-            } else if (timeIn) {
+            if (statusSelect === 'Present' && timeIn) {
                 const policyTimeStr = document.getElementById('policyTime').value;
-                const graceMins = parseInt(document.getElementById('policyGrace').value);
+                const graceMins = parseInt(document.getElementById('policyGrace').value) || 0;
                 
                 const [pInHours, pInMins] = policyTimeStr.split(':').map(Number);
                 const [tInHours, tInMins] = timeIn.split(':').map(Number);
@@ -565,10 +717,12 @@
             attendanceLogs.unshift(logEntry);
             localStorage.setItem('camattend_db', JSON.stringify(attendanceLogs));
 
+            clearEmployeeSelection();
             document.getElementById('formTime').value = '';
             document.getElementById('formPermission').value = 'None';
+            document.getElementById('formPermissionCustom').classList.add('hidden');
             document.getElementById('formNote').value = '';
-            toggleTimeField();
+            handleStatusChange();
             renderLedger();
             showToast(`Recorded: ${employee}`);
         }
@@ -601,8 +755,9 @@
 
             filtered.forEach(log => {
                 let statusBadge = '';
-                if(log.status === 'Present') statusBadge = `<span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">${currentLang === 'en' ? '🟢 Present' : '🟢 Présent'}</span>`;
-                if(log.status === 'Late') statusBadge = `<span class="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">${currentLang === 'en' ? '🟡 Late' : '🟡 En Retard'}</span>`;
+                if(log.status === 'Present') statusBadge = `<span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">🟢 Present</span>`;
+                if(log.status === 'Late') statusBadge = `<span class="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">🟡 Late</span>`;
+                if(log.status === 'Absent') statusBadge = `<span class="bg-rose-100 text-rose-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">🔴 Absent</span>`;
                 if(log.status === 'Permission') statusBadge = `<span class="bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded-full text-[10px]" title="${log.permission}">🔵 Perm.</span>`;
 
                 let noteBtn = log.note ? 
@@ -633,16 +788,18 @@
         }
 
         function calculateStats() {
-            let presentCount = 0, lateCount = 0, permCount = 0, totalMins = 0;
+            let presentCount = 0, lateCount = 0, absentCount = 0, permCount = 0, totalMins = 0;
 
             attendanceLogs.forEach(log => {
                 if (log.status === 'Present') presentCount++;
                 if (log.status === 'Late') { lateCount++; totalMins += log.lateMinutes; }
+                if (log.status === 'Absent') absentCount++;
                 if (log.status === 'Permission') permCount++;
             });
 
             document.getElementById('statPresent').textContent = presentCount;
             document.getElementById('statLate').textContent = lateCount;
+            document.getElementById('statAbsent').textContent = absentCount;
             document.getElementById('statPermission').textContent = permCount;
             document.getElementById('statMinutes').textContent = totalMins + "m";
         }
@@ -654,6 +811,204 @@
             showToast("Log entry removed");
         }
 
+        // --- INDIVIDUAL EMPLOYEE VISUAL REPORTS ---
+        function openEmployeeReportModal() {
+            const select = document.getElementById('reportStaffSelect');
+            select.innerHTML = '<option value="" disabled selected>-- Choose staff member to generate card --</option>';
+            employees.forEach(emp => {
+                select.innerHTML += `<option value="${emp.name}">${emp.name} (${emp.role || emp.dept || 'Staff'})</option>`;
+            });
+            document.getElementById('reportCardContainer').innerHTML = '<div class="text-center p-8 text-xs text-slate-400">Select an employee above to inspect individual performance visuals.</div>';
+            document.getElementById('employeeReportModal').classList.remove('hidden');
+        }
+
+        function closeEmployeeReportModal() {
+            document.getElementById('employeeReportModal').classList.add('hidden');
+        }
+
+        function renderIndividualReport() {
+            const staffName = document.getElementById('reportStaffSelect').value;
+            const emp = employees.find(e => e.name === staffName);
+            if (!emp) return;
+
+            const logs = attendanceLogs.filter(l => l.employee === staffName);
+            let present = 0, late = 0, absent = 0, perm = 0, lateMins = 0;
+
+            logs.forEach(l => {
+                if (l.status === 'Present') present++;
+                if (l.status === 'Late') { late++; lateMins += l.lateMinutes; }
+                if (l.status === 'Absent') absent++;
+                if (l.status === 'Permission') perm++;
+            });
+
+            const totalLogged = logs.length || 1;
+            const presentPct = Math.round(((present + late) / totalLogged) * 100);
+
+            const container = document.getElementById('reportCardContainer');
+            container.innerHTML = `
+                <div class="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-5 rounded-xl shadow-md space-y-3">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="text-lg font-bold">${emp.name}</h4>
+                            <p class="text-xs text-emerald-200">${emp.role || 'Staff Member'} • ${emp.dept || 'General'}</p>
+                        </div>
+                        <span class="bg-emerald-700/80 text-emerald-100 font-mono text-xs px-3 py-1 rounded-full border border-emerald-500/30">
+                            Rate: ${emp.dailyRate ? emp.dailyRate.toLocaleString() + ' FCFA/day' : 'Not Set'}
+                        </span>
+                    </div>
+
+                    <!-- Attendance Progress Bar -->
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold mb-1">
+                            <span>Attendance Compliance Rate</span>
+                            <span class="font-mono text-emerald-300">${presentPct}%</span>
+                        </div>
+                        <div class="w-full bg-emerald-950/60 rounded-full h-2.5 overflow-hidden">
+                            <div class="bg-emerald-400 h-2.5 rounded-full transition-all duration-500" style="width: ${presentPct}%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual KPI Matrix -->
+                <div class="grid grid-cols-4 gap-3">
+                    <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-center">
+                        <span class="block text-[10px] font-bold uppercase text-emerald-700">Present</span>
+                        <span class="text-xl font-black text-emerald-800">${present}</span>
+                    </div>
+                    <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
+                        <span class="block text-[10px] font-bold uppercase text-amber-700">Late Days</span>
+                        <span class="text-xl font-black text-amber-800">${late}</span>
+                    </div>
+                    <div class="bg-rose-50 p-3 rounded-lg border border-rose-200 text-center">
+                        <span class="block text-[10px] font-bold uppercase text-rose-700">Absences</span>
+                        <span class="text-xl font-black text-rose-800">${absent}</span>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 text-center">
+                        <span class="block text-[10px] font-bold uppercase text-blue-700">Permissions</span>
+                        <span class="text-xl font-black text-blue-800">${perm}</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
+                    <span class="font-medium text-slate-600">Total Accumulated Lateness Time:</span>
+                    <span class="font-mono font-bold text-rose-600 text-sm">${lateMins} minutes</span>
+                </div>
+            `;
+        }
+
+        // --- PUBLIC HOLIDAYS WITH CUSTOM ENTRY ---
+        function renderHolidaysList() {
+            const container = document.getElementById('holidaysListContainer');
+            container.innerHTML = '';
+
+            holidays.sort((a,b) => a.date.localeCompare(b.date)).forEach((h, index) => {
+                const item = `
+                    <div class="p-2.5 flex justify-between items-center">
+                        <div>
+                            <span class="font-medium text-slate-800">${h.title}</span>
+                            ${!h.isOfficial ? `<span class="ml-2 text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-semibold">Custom</span>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-mono font-bold text-emerald-700">${h.date}</span>
+                            ${!h.isOfficial ? `<button onclick="removeCustomHoliday(${index})" class="text-slate-300 hover:text-rose-600 transition-colors"><i class="fa-solid fa-trash-can text-xs"></i></button>` : ''}
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', item);
+            });
+        }
+
+        function handleAddCustomHoliday(e) {
+            e.preventDefault();
+            const title = document.getElementById('newHolidayName').value;
+            const date = document.getElementById('newHolidayDate').value;
+
+            holidays.push({ title, date, isOfficial: false });
+            localStorage.setItem('camattend_holidays', JSON.stringify(holidays));
+
+            document.getElementById('newHolidayName').value = '';
+            document.getElementById('newHolidayDate').value = '';
+            renderHolidaysList();
+            showToast("Custom holiday added");
+        }
+
+        function removeCustomHoliday(index) {
+            holidays.splice(index, 1);
+            localStorage.setItem('camattend_holidays', JSON.stringify(holidays));
+            renderHolidaysList();
+            showToast("Holiday removed");
+        }
+
+        function openHolidaysModal() {
+            renderHolidaysList();
+            document.getElementById('holidaysModal').classList.remove('hidden');
+        }
+
+        function closeHolidaysModal() {
+            document.getElementById('holidaysModal').classList.add('hidden');
+        }
+
+        // --- STAFF DIRECTORY MANAGEMENT ---
+        function openStaffModal() {
+            renderStaffList();
+            document.getElementById('staffModal').classList.remove('hidden');
+        }
+
+        function closeStaffModal() {
+            document.getElementById('staffModal').classList.add('hidden');
+        }
+
+        function renderStaffList() {
+            const container = document.getElementById('staffListContainer');
+            container.innerHTML = '';
+
+            employees.forEach(emp => {
+                const item = `
+                    <div class="p-3 flex justify-between items-center text-xs bg-white">
+                        <div>
+                            <div class="font-bold text-slate-800">${emp.name}</div>
+                            <div class="text-[10px] text-slate-400">${emp.role || 'No Role'} • ${emp.dept || 'General'}</div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-[10px]">${emp.dailyRate ? emp.dailyRate.toLocaleString() + ' XAF' : 'No Rate'}</span>
+                            <button onclick="removeStaff(${emp.id})" class="text-slate-300 hover:text-rose-600 transition-colors">
+                                <i class="fa-solid fa-user-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', item);
+            });
+        }
+
+        function handleAddStaff(e) {
+            e.preventDefault();
+            const name = document.getElementById('newStaffName').value;
+            const role = document.getElementById('newStaffRole').value;
+            const dept = document.getElementById('newStaffDept').value;
+            const rate = parseFloat(document.getElementById('newStaffRate').value) || 0;
+
+            const newEmp = { id: Date.now(), name, role, dept, dailyRate: rate };
+            employees.push(newEmp);
+            localStorage.setItem('camattend_staff', JSON.stringify(employees));
+
+            document.getElementById('newStaffName').value = '';
+            document.getElementById('newStaffRole').value = '';
+            document.getElementById('newStaffDept').value = '';
+            document.getElementById('newStaffRate').value = '';
+
+            renderStaffList();
+            showToast(`${name} added to staff directory`);
+        }
+
+        function removeStaff(id) {
+            employees = employees.filter(emp => emp.id !== id);
+            localStorage.setItem('camattend_staff', JSON.stringify(employees));
+            renderStaffList();
+            showToast("Employee removed");
+        }
+
+        // --- OTHER MODALS & EXPORTS ---
         function openNoteModal(emp, date, note) {
             document.getElementById('noteModalSub').textContent = `${emp} — ${date}`;
             document.getElementById('noteModalContent').textContent = note;
@@ -681,14 +1036,17 @@
 
             let staffStats = {};
             employees.forEach(e => {
-                staffStats[e.name] = { lateCount: 0, totalMins: 0 };
+                staffStats[e.name] = { lateCount: 0, absentCount: 0, totalMins: 0 };
             });
 
             attendanceLogs.forEach(log => {
+                if (!staffStats[log.employee]) staffStats[log.employee] = { lateCount: 0, absentCount: 0, totalMins: 0 };
                 if (log.status === 'Late') {
-                    if (!staffStats[log.employee]) staffStats[log.employee] = { lateCount: 0, totalMins: 0 };
                     staffStats[log.employee].lateCount += 1;
                     staffStats[log.employee].totalMins += log.lateMinutes;
+                }
+                if (log.status === 'Absent') {
+                    staffStats[log.employee].absentCount += 1;
                 }
             });
 
@@ -710,7 +1068,7 @@
                     <tr class="hover:bg-slate-50">
                         <td class="p-2.5 font-medium text-slate-800">${staffName}</td>
                         <td class="p-2.5 font-mono">${stat.lateCount}</td>
-                        <td class="p-2.5 font-mono text-rose-600">${stat.totalMins} m</td>
+                        <td class="p-2.5 font-mono text-rose-600">${stat.absentCount}</td>
                         <td class="p-2.5 font-mono text-right font-bold text-slate-800">${deduction.toLocaleString()} XAF</td>
                     </tr>
                 `;
@@ -720,21 +1078,14 @@
             document.getElementById('totalPayrollDeduction').textContent = `${grandTotalDeduction.toLocaleString()} FCFA`;
         }
 
-        function openHolidaysModal() {
-            document.getElementById('holidaysModal').classList.remove('hidden');
-        }
-
-        function closeHolidaysModal() {
-            document.getElementById('holidaysModal').classList.add('hidden');
-        }
-
         function exportJSONBackup() {
             const backupData = {
                 app: "CamAttend",
-                version: "2.0",
+                version: "3.0",
                 exportDate: new Date().toISOString(),
                 logs: JSON.parse(localStorage.getItem('camattend_db')) || [],
-                staff: JSON.parse(localStorage.getItem('camattend_staff')) || []
+                staff: JSON.parse(localStorage.getItem('camattend_staff')) || [],
+                holidays: JSON.parse(localStorage.getItem('camattend_holidays')) || []
             };
 
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
@@ -798,15 +1149,19 @@
 
                     showConfirmModal(
                         "Restore Backup File", 
-                        `Are you sure you want to restore ${importedData.logs.length} attendance records? This will overwrite current storage.`, 
+                        `Are you sure you want to restore ${importedData.logs.length} attendance records?`, 
                         () => {
                             localStorage.setItem('camattend_db', JSON.stringify(importedData.logs));
                             attendanceLogs = importedData.logs;
 
-                            if (importedData.staff && importedData.staff.length > 0) {
+                            if (importedData.staff) {
                                 localStorage.setItem('camattend_staff', JSON.stringify(importedData.staff));
                                 employees = importedData.staff;
-                                populateEmployeeDropdown();
+                            }
+
+                            if (importedData.holidays) {
+                                localStorage.setItem('camattend_holidays', JSON.stringify(importedData.holidays));
+                                holidays = importedData.holidays;
                             }
 
                             renderLedger();
@@ -824,7 +1179,7 @@
         function confirmClearData() {
             showConfirmModal(
                 "Wipe System Data", 
-                "Are you sure you want to delete all attendance logs? This action cannot be reversed unless you have a JSON backup.",
+                "Are you sure you want to delete all attendance logs? This action cannot be reversed unless you have a backup.",
                 () => {
                     attendanceLogs = [];
                     localStorage.removeItem('camattend_db');
@@ -861,90 +1216,40 @@
             }
 
             const todayStr = new Date().toISOString().split('T')[0];
-            let totalPresent = 0, totalLate = 0, totalPerm = 0;
-            let lateDetails = "";
+            let totalPresent = 0, totalLate = 0, totalAbsent = 0, totalPerm = 0;
+            let exceptionDetails = "";
 
             attendanceLogs.forEach(log => {
                 if (log.date === todayStr) {
                     if (log.status === 'Present') totalPresent++;
                     if (log.status === 'Permission') totalPerm++;
+                    if (log.status === 'Absent') {
+                        totalAbsent++;
+                        exceptionDetails += `\n- ${log.employee}: ABSENT`;
+                    }
                     if (log.status === 'Late') {
                         totalLate++;
-                        lateDetails += `\n- ${log.employee}: Late by ${log.lateMinutes} mins (Arrived at ${log.timeIn})`;
+                        exceptionDetails += `\n- ${log.employee}: Late by ${log.lateMinutes} mins (Arrived at ${log.timeIn})`;
                     }
                 }
             });
 
-            let textMessage = `*🇨🇲 CamAttend - Daily Office Summary*\n📅 Date: ${todayStr}\n\n`;
+            let textMessage = `*🇨🇲 CamAttend - Daily Summary*\n📅 Date: ${todayStr}\n\n`;
             textMessage += `🟢 Present Today: ${totalPresent}\n`;
             textMessage += `🟡 Late Today: ${totalLate}\n`;
-            textMessage += `🔵 Approved Permissions: ${totalPerm}\n`;
+            textMessage += `🔴 Absent Today: ${totalAbsent}\n`;
+            textMessage += `🔵 Permissions: ${totalPerm}\n`;
 
-            if (totalLate > 0) {
-                textMessage += `\n*Lateness Exceptions:*${lateDetails}`;
+            if (totalLate > 0 || totalAbsent > 0) {
+                textMessage += `\n*Daily Exceptions:*${exceptionDetails}`;
             } else {
-                textMessage += `\n✨ Great job! Everyone was on time today.`;
+                textMessage += `\n✨ Perfect attendance today!`;
             }
 
             const encodedText = encodeURIComponent(textMessage);
             window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
         }
 
-        function openStaffModal() {
-            renderStaffList();
-            document.getElementById('staffModal').classList.remove('hidden');
-        }
-
-        function closeStaffModal() {
-            document.getElementById('staffModal').classList.add('hidden');
-        }
-
-        function renderStaffList() {
-            const container = document.getElementById('staffListContainer');
-            container.innerHTML = '';
-
-            employees.forEach(emp => {
-                const item = `
-                    <div class="p-2.5 flex justify-between items-center text-xs bg-white">
-                        <div>
-                            <span class="font-semibold text-slate-800">${emp.name}</span>
-                            <span class="text-slate-400 ml-1">(${emp.dept || 'General'})</span>
-                        </div>
-                        <button onclick="removeStaff(${emp.id})" class="text-slate-300 hover:text-rose-600 transition-colors">
-                            <i class="fa-solid fa-user-minus"></i>
-                        </button>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', item);
-            });
-        }
-
-        function handleAddStaff(e) {
-            e.preventDefault();
-            const name = document.getElementById('newStaffName').value;
-            const dept = document.getElementById('newStaffDept').value;
-
-            const newEmp = { id: Date.now(), name, dept };
-            employees.push(newEmp);
-            localStorage.setItem('camattend_staff', JSON.stringify(employees));
-
-            document.getElementById('newStaffName').value = '';
-            document.getElementById('newStaffDept').value = '';
-
-            populateEmployeeDropdown();
-            renderStaffList();
-            showToast(`${name} added to staff directory`);
-        }
-
-        function removeStaff(id) {
-            employees = employees.filter(emp => emp.id !== id);
-            localStorage.setItem('camattend_staff', JSON.stringify(employees));
-            populateEmployeeDropdown();
-            renderStaffList();
-            showToast("Employee removed");
-        }
-
-        // STEP 3: SERVICE WORKER REGISTRATION (Linking External sw.js)
         function registerPWA() {
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
