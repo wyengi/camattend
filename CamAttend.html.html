@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CamAttend - Offline Attendance Manager</title>
+    <!-- Web App Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#047857">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-12">
+
+    <!-- Toast Notification Overlay -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 pointer-events-none">
+        <span id="toastIcon" class="text-emerald-400"><i class="fa-solid fa-circle-check"></i></span>
+        <span id="toastMsg" class="text-xs font-medium">Action completed successfully.</span>
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="bg-emerald-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">🇨🇲</span>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight leading-tight">CamAttend</h1>
+                    <span class="text-[10px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded-full font-medium" id="langSubHeader">Cameroon Edition PWA</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <button onclick="toggleLanguage()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-emerald-600 flex items-center space-x-1 cursor-pointer">
+                    <i class="fa-solid fa-language"></i>
+                    <span id="currentLangLabel">FR</span>
+                </button>
+
+                <button onclick="openPayrollModal()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-emerald-600 cursor-pointer">
+                    <i class="fa-solid fa-calculator text-amber-300"></i>
+                    <span class="hidden md:inline" data-i18n="navPayroll">FCFA Payroll</span>
+                </button>
+
+                <button onclick="openHolidaysModal()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-emerald-600 cursor-pointer">
+                    <i class="fa-solid fa-calendar-day text-emerald-200"></i>
+                    <span class="hidden lg:inline" data-i18n="navHolidays">Public Holidays</span>
+                </button>
+
+                <button onclick="openStaffModal()" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-emerald-600 cursor-pointer">
+                    <i class="fa-solid fa-users"></i>
+                    <span class="hidden sm:inline" data-i18n="navStaff">Manage Staff</span>
+                </button>
+                
+                <div class="text-xs font-mono bg-emerald-900/60 text-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-600/50" id="liveClock">
+                    --:--:--
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- LEFT COLUMN: Policies & Input Form -->
+        <div class="space-y-6 lg:col-span-1">
+            <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+                    <span data-i18n="policyTitle">Shift Policies</span>
+                    <i class="fa-solid fa-sliders text-slate-400"></i>
+                </h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1" data-i18n="policyTime">Shift Start Time</label>
+                        <input type="time" id="policyTime" value="08:00" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" onchange="calculateStats()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1" data-i18n="policyGrace">Grace Period</label>
+                        <select id="policyGrace" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500" onchange="calculateStats()">
+                            <option value="0">No Grace Period</option>
+                            <option value="5">5 Minutes</option>
+                            <option value="10">10 Minutes</option>
+                            <option value="15" selected>15 Minutes</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl shadow-xs border border-slate-200">
+                <h2 class="text-base font-bold text-slate-900 mb-4 flex items-center">
+                    <i class="fa-solid fa-pen-to-square text-emerald-600 mr-2"></i> <span data-i18n="formTitle">Daily Attendance Log</span>
+                </h2>
+                <form id="attendanceForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="formEmployee">Select Employee *</label>
+                        <select id="formEmployee" required class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none">
+                            <option value="" disabled selected>-- Choose staff member --</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="formDate">Date *</label>
+                            <input type="date" id="formDate" required class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="formTime">Clock-In Time</label>
+                            <input type="time" id="formTime" class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1" data-i18n="formPermission">Permission / Leave Exception</label>
+                        <select id="formPermission" class="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500" onchange="toggleTimeField()">
+                            <option value="None" selected>None (Standard Clock-In)</option>
+                            <option value="Casual Leave">Casual Permission (Exceptionnelle)</option>
+                            <option value="Sick Leave">Sick Leave (Maladie)</option>
+                            <option value="Annual Leave">Annual Paid Leave (Congé Payé)</option>
+                            <option value="Maternity Leave">Maternity / Paternity Leave</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                            <span data-i18n="formNoteLabel">Private Supervisor Notes</span>
+                            <span class="text-[10px] text-slate-400 font-normal"><i class="fa-solid fa-lock text-[9px] mr-0.5"></i> Confidential</span>
+                        </label>
+                        <textarea id="formNote" rows="2" placeholder="e.g. Permission granted by HR; Medical certificate attached..." class="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-xs transition-colors text-xs cursor-pointer flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span data-i18n="btnSaveRecord">Save Attendance Entry</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Analytics, Backup Controls & Table -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statPresent">Present</span>
+                    <span class="text-2xl font-black text-emerald-600 mt-1" id="statPresent">0</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statLate">Late</span>
+                    <span class="text-2xl font-black text-amber-500 mt-1" id="statLate">0</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statPermission">Permissions</span>
+                    <span class="text-2xl font-black text-blue-500 mt-1" id="statPermission">0</span>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex flex-col justify-between">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400" data-i18n="statMinutes">Total Late Min.</span>
+                    <span class="text-2xl font-black text-rose-500 mt-1" id="statMinutes">0m</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                    <h3 class="font-bold text-slate-800 flex items-center text-sm">
+                        <i class="fa-solid fa-list-check text-emerald-600 mr-2"></i> <span data-i18n="ledgerTitle">Attendance Ledger Records</span>
+                    </h3>
+                    
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="exportJSONBackup()" title="Download JSON file backup" class="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                            <i class="fa-solid fa-file-export"></i>
+                            <span>Export JSON</span>
+                        </button>
+                        <button onclick="exportCSVData()" title="Download CSV spreadsheet" class="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span>Export CSV</span>
+                        </button>
+                        
+                        <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importJSONBackup(event)">
+                        <button onclick="document.getElementById('importFileInput').click()" title="Load JSON backup" class="bg-amber-100 text-amber-800 hover:bg-amber-200 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                            <i class="fa-solid fa-file-import"></i>
+                            <span>Restore JSON</span>
+                        </button>
+                        
+                        <button onclick="shareToWhatsApp()" class="bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+                            <i class="fa-brands fa-whatsapp"></i>
+                            <span class="hidden sm:inline">WhatsApp</span>
+                        </button>
+                        <button onclick="confirmClearData()" class="bg-slate-200 text-slate-600 hover:bg-rose-100 hover:text-rose-700 text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors cursor-pointer">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="filterSearch" placeholder="Search staff name..." class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-emerald-500" oninput="renderLedger()">
+                    </div>
+
+                    <select id="filterStatus" class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs focus:outline-none focus:border-emerald-500" onchange="renderLedger()">
+                        <option value="All" data-i18n="filterAll">All Statuses</option>
+                        <option value="Present" data-i18n="filterPresent">Present Only</option>
+                        <option value="Late" data-i18n="filterLate">Late Only</option>
+                        <option value="Permission" data-i18n="filterPermission">On Approved Permission</option>
+                    </select>
+
+                    <div>
+                        <input type="date" id="filterStartDate" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs focus:outline-none focus:border-emerald-500" onchange="renderLedger()" title="Start Date Filter">
+                    </div>
+
+                    <div>
+                        <input type="date" id="filterEndDate" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs focus:outline-none focus:border-emerald-500" onchange="renderLedger()" title="End Date Filter">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100/70 border-b border-slate-200 font-bold text-slate-600">
+                                <th class="p-3" data-i18n="thDate">Date</th>
+                                <th class="p-3" data-i18n="thEmployee">Employee</th>
+                                <th class="p-3" data-i18n="thTimeIn">Time In</th>
+                                <th class="p-3" data-i18n="thStatus">Status</th>
+                                <th class="p-3" data-i18n="thLateness">Lateness</th>
+                                <th class="p-3" data-i18n="thNote">Note</th>
+                                <th class="p-3 text-right" data-i18n="thActions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerBody" class="divide-y divide-slate-100">
+                            <!-- Entries injected dynamically -->
+                        </tbody>
+                    </table>
+                    
+                    <div id="noRecords" class="p-8 text-center text-slate-400 text-xs hidden">
+                        <i class="fa-regular fa-folder-open text-2xl mb-2 block"></i>
+                        <span data-i18n="noRecordsMsg">No attendance records logged matching your current filter criteria.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: View/Edit Private Note -->
+    <div id="noteModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-lock text-amber-500 mr-2"></i> <span data-i18n="noteModalTitle">Private Supervisor Note</span>
+                </h3>
+                <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div>
+                <p class="text-xs text-slate-500 mb-2" id="noteModalSub">Log details</p>
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 italic leading-relaxed min-h-[80px]" id="noteModalContent">
+                    -- No note recorded --
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="closeNoteModal()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-700 hover:bg-slate-800 rounded-lg cursor-pointer">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: FCFA Payroll & Lateness Penalties -->
+    <div id="payrollModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-calculator text-amber-500 mr-2"></i> FCFA Lateness & Penalty Calculator
+                </h3>
+                <button onclick="closePayrollModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Penalty Rule</label>
+                    <select id="penaltyType" class="w-full bg-white border border-slate-200 rounded-lg p-2 focus:outline-none" onchange="calculatePayrollDeductions()">
+                        <option value="perMinute">XAF per Late Minute</option>
+                        <option value="flatLate">Flat Fee per Late Day</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">Penalty Rate (FCFA)</label>
+                    <input type="number" id="penaltyRate" value="100" class="w-full bg-white border border-slate-200 rounded-lg p-2 focus:outline-none" oninput="calculatePayrollDeductions()">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-60 border border-slate-100 rounded-lg">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-100 font-semibold text-slate-600 border-b border-slate-200">
+                        <tr>
+                            <th class="p-2.5">Staff Member</th>
+                            <th class="p-2.5">Late Count</th>
+                            <th class="p-2.5">Total Mins</th>
+                            <th class="p-2.5 text-right">Deduction (FCFA)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payrollTableBody" class="divide-y divide-slate-100">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-between items-center bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-xs">
+                <span class="font-semibold text-emerald-900">Total Deductions Recommended:</span>
+                <span class="font-black text-emerald-700 text-sm" id="totalPayrollDeduction">0 FCFA</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Public Holidays Reference -->
+    <div id="holidaysModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-flag text-emerald-600 mr-2"></i> Official Cameroon Holidays (2026)
+                </h3>
+                <button onclick="closeHolidaysModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="max-h-64 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 text-xs">
+                <div class="p-2.5 flex justify-between"><span>New Year's Day (Jour de l'An)</span><span class="font-mono font-bold text-slate-600">Jan 1</span></div>
+                <div class="p-2.5 flex justify-between bg-emerald-50/50"><span>Youth Day (Fête de la Jeunesse)</span><span class="font-mono font-bold text-emerald-700">Feb 11</span></div>
+                <div class="p-2.5 flex justify-between"><span>Good Friday (Vendredi Saint)</span><span class="font-mono font-bold text-slate-600">Apr 3</span></div>
+                <div class="p-2.5 flex justify-between"><span>Labor Day (Fête du Travail)</span><span class="font-mono font-bold text-slate-600">May 1</span></div>
+                <div class="p-2.5 flex justify-between bg-emerald-50/50"><span>National Day (Fête Nationale)</span><span class="font-mono font-bold text-emerald-700">May 20</span></div>
+                <div class="p-2.5 flex justify-between"><span>Ascension Day (Ascension)</span><span class="font-mono font-bold text-slate-600">May 14</span></div>
+                <div class="p-2.5 flex justify-between"><span>Assumption Day (Assomption)</span><span class="font-mono font-bold text-slate-600">Aug 15</span></div>
+                <div class="p-2.5 flex justify-between"><span>Christmas Day (Noël)</span><span class="font-mono font-bold text-slate-600">Dec 25</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Staff Management -->
+    <div id="staffModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-users-gear text-emerald-600 mr-2"></i> Employee Directory
+                </h3>
+                <button onclick="closeStaffModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <form id="addStaffForm" onsubmit="handleAddStaff(event)" class="flex gap-2">
+                <input type="text" id="newStaffName" placeholder="Staff Name" required class="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                <input type="text" id="newStaffDept" placeholder="Dept." class="w-28 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500">
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 rounded-lg text-xs transition-colors cursor-pointer">Add</button>
+            </form>
+
+            <div class="max-h-60 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100" id="staffListContainer">
+                <!-- Staff items injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmation Prompt -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-sm p-5 space-y-4">
+            <h3 class="font-bold text-slate-800 text-sm" id="modalTitle">Confirm Operation</h3>
+            <p class="text-xs text-slate-600 leading-relaxed" id="modalMessage">Are you sure you want to proceed?</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeConfirmModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button id="modalConfirmBtn" class="px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const defaultEmployees = [
+            { id: 1, name: "Amadou Bello", dept: "Operations" },
+            { id: 2, name: "Chantal Ngo", dept: "Finance" },
+            { id: 3, name: "Fabiola Kamga", dept: "Human Resources" },
+            { id: 4, name: "Jean-Pierre Tchakounté", dept: "IT Support" },
+            { id: 5, name: "Miracle Ndip", dept: "Marketing" }
+        ];
+
+        const i18n = {
+            en: {
+                langSubHeader: "Cameroon Edition PWA",
+                navPayroll: "FCFA Payroll",
+                navHolidays: "Public Holidays",
+                navStaff: "Manage Staff",
+                policyTitle: "Shift Policies",
+                policyTime: "Shift Start Time",
+                policyGrace: "Grace Period",
+                formTitle: "Daily Attendance Log",
+                formEmployee: "Select Employee *",
+                formDate: "Date *",
+                formTime: "Clock-In Time",
+                formPermission: "Permission / Leave Exception",
+                formNoteLabel: "Private Supervisor Notes",
+                btnSaveRecord: "Save Attendance Entry",
+                statPresent: "Present",
+                statLate: "Late",
+                statPermission: "Permissions",
+                statMinutes: "Total Late Min.",
+                ledgerTitle: "Attendance Ledger Records",
+                filterAll: "All Statuses",
+                filterPresent: "Present Only",
+                filterLate: "Late Only",
+                filterPermission: "On Approved Permission",
+                thDate: "Date",
+                thEmployee: "Employee",
+                thTimeIn: "Time In",
+                thStatus: "Status",
+                thLateness: "Lateness",
+                thNote: "Note",
+                thActions: "Actions",
+                noRecordsMsg: "No attendance records logged matching your current filter criteria.",
+                noteModalTitle: "Private Supervisor Note"
+            },
+            fr: {
+                langSubHeader: "Édition Cameroun PWA",
+                navPayroll: "Retenues FCFA",
+                navHolidays: "Jours Fériés",
+                navStaff: "Personnel",
+                policyTitle: "Politique de Présence",
+                policyTime: "Heure de Début",
+                policyGrace: "Période de Grâce",
+                formTitle: "Registre de Présence",
+                formEmployee: "Sélectionner l'Employé *",
+                formDate: "Date *",
+                formTime: "Heure d'Arrivée",
+                formPermission: "Permission / Congé Exceptionnel",
+                formNoteLabel: "Notes Confidentielles du Superviser",
+                btnSaveRecord: "Enregistrer la Présence",
+                statPresent: "Présents",
+                statLate: "En Retard",
+                statPermission: "Permissions",
+                statMinutes: "Retard Total (Min)",
+                ledgerTitle: "Registre des Présences",
+                filterAll: "Tous les Statuts",
+                filterPresent: "Présents Uniquement",
+                filterLate: "En Retard Uniquement",
+                filterPermission: "En Permission",
+                thDate: "Date",
+                thEmployee: "Employé",
+                thTimeIn: "Arrivée",
+                thStatus: "Statut",
+                thLateness: "Retard",
+                thNote: "Note",
+                thActions: "Actions",
+                noRecordsMsg: "Aucun enregistrement ne correspond aux critères de recherche.",
+                noteModalTitle: "Note Confidentielle du Superviser"
+            }
+        };
+
+        let currentLang = 'en';
+        let employees = JSON.parse(localStorage.getItem('camattend_staff')) || defaultEmployees;
+        let attendanceLogs = JSON.parse(localStorage.getItem('camattend_db')) || [];
+
+        window.onload = function() {
+            document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
+            populateEmployeeDropdown();
+            startClock();
+            renderLedger();
+            registerPWA();
+        };
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'en' ? 'fr' : 'en';
+            document.getElementById('currentLangLabel').textContent = currentLang === 'en' ? 'FR' : 'EN';
+            
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (i18n[currentLang][key]) {
+                    el.textContent = i18n[currentLang][key];
+                }
+            });
+
+            renderLedger();
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+            
+            toastMsg.textContent = msg;
+            toastIcon.innerHTML = isError ? `<i class="fa-solid fa-circle-exclamation text-rose-400"></i>` : `<i class="fa-solid fa-circle-check text-emerald-400"></i>`;
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function startClock() {
+            setInterval(() => {
+                const now = new Date();
+                document.getElementById('liveClock').textContent = now.toLocaleTimeString('en-US', { hour12: true });
+            }, 1000);
+        }
+
+        function populateEmployeeDropdown() {
+            const empDropdown = document.getElementById('formEmployee');
+            empDropdown.innerHTML = `<option value="" disabled selected>-- ${currentLang === 'en' ? 'Choose staff member' : 'Choisir un employé'} --</option>`;
+            
+            employees.sort((a,b) => a.name.localeCompare(b.name)).forEach(emp => {
+                let opt = document.createElement('option');
+                opt.value = emp.name;
+                opt.textContent = `${emp.name} (${emp.dept || 'General'})`;
+                empDropdown.appendChild(opt);
+            });
+        }
+
+        function toggleTimeField() {
+            const permType = document.getElementById('formPermission').value;
+            const timeInput = document.getElementById('formTime');
+            if (permType !== 'None') {
+                timeInput.value = '';
+                timeInput.disabled = true;
+                timeInput.classList.add('bg-slate-100', 'cursor-not-allowed');
+            } else {
+                timeInput.disabled = false;
+                timeInput.classList.remove('bg-slate-100', 'cursor-not-allowed');
+            }
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            const employee = document.getElementById('formEmployee').value;
+            const date = document.getElementById('formDate').value;
+            const timeIn = document.getElementById('formTime').value;
+            const permission = document.getElementById('formPermission').value;
+            const note = document.getElementById('formNote').value.trim();
+
+            let finalStatus = "Present";
+            let lateMinutes = 0;
+
+            if (permission !== "None") {
+                finalStatus = "Permission";
+            } else if (timeIn) {
+                const policyTimeStr = document.getElementById('policyTime').value;
+                const graceMins = parseInt(document.getElementById('policyGrace').value);
+                
+                const [pInHours, pInMins] = policyTimeStr.split(':').map(Number);
+                const [tInHours, tInMins] = timeIn.split(':').map(Number);
+
+                const policyTotalMinutes = (pInHours * 60) + pInMins;
+                const actualTotalMinutes = (tInHours * 60) + tInMins;
+
+                if (actualTotalMinutes > (policyTotalMinutes + graceMins)) {
+                    finalStatus = "Late";
+                    lateMinutes = actualTotalMinutes - policyTotalMinutes;
+                }
+            }
+
+            const logEntry = {
+                id: Date.now(),
+                employee,
+                date,
+                timeIn: timeIn || '--:--',
+                permission,
+                status: finalStatus,
+                lateMinutes,
+                note: note || ""
+            };
+
+            attendanceLogs = attendanceLogs.filter(log => !(log.employee === employee && log.date === date));
+            attendanceLogs.unshift(logEntry);
+            localStorage.setItem('camattend_db', JSON.stringify(attendanceLogs));
+
+            document.getElementById('formTime').value = '';
+            document.getElementById('formPermission').value = 'None';
+            document.getElementById('formNote').value = '';
+            toggleTimeField();
+            renderLedger();
+            showToast(`Recorded: ${employee}`);
+        }
+
+        function renderLedger() {
+            const searchVal = document.getElementById('filterSearch').value.toLowerCase();
+            const statusFilter = document.getElementById('filterStatus').value;
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+
+            const tbody = document.getElementById('ledgerBody');
+            tbody.innerHTML = '';
+
+            let filtered = attendanceLogs.filter(log => {
+                const matchesSearch = log.employee.toLowerCase().includes(searchVal);
+                const matchesStatus = (statusFilter === 'All') || (log.status === statusFilter);
+                
+                let matchesDateRange = true;
+                if (startDate) matchesDateRange = matchesDateRange && (log.date >= startDate);
+                if (endDate) matchesDateRange = matchesDateRange && (log.date <= endDate);
+
+                return matchesSearch && matchesStatus && matchesDateRange;
+            });
+
+            if (filtered.length === 0) {
+                document.getElementById('noRecords').classList.remove('hidden');
+            } else {
+                document.getElementById('noRecords').classList.add('hidden');
+            }
+
+            filtered.forEach(log => {
+                let statusBadge = '';
+                if(log.status === 'Present') statusBadge = `<span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">${currentLang === 'en' ? '🟢 Present' : '🟢 Présent'}</span>`;
+                if(log.status === 'Late') statusBadge = `<span class="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full text-[10px]">${currentLang === 'en' ? '🟡 Late' : '🟡 En Retard'}</span>`;
+                if(log.status === 'Permission') statusBadge = `<span class="bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded-full text-[10px]" title="${log.permission}">🔵 Perm.</span>`;
+
+                let noteBtn = log.note ? 
+                    `<button onclick="openNoteModal('${log.employee}', '${log.date}', \`${log.note.replace(/`/g, '\\`')}\`)" class="text-amber-600 hover:text-amber-700 font-bold flex items-center space-x-1 cursor-pointer">
+                        <i class="fa-solid fa-lock text-[10px]"></i>
+                        <span>View</span>
+                    </button>` : `<span class="text-slate-300">-</span>`;
+
+                let row = `
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="p-3 font-mono text-slate-500">${log.date}</td>
+                        <td class="p-3 font-medium text-slate-800">${log.employee}</td>
+                        <td class="p-3 font-mono text-slate-600">${log.timeIn}</td>
+                        <td class="p-3">${statusBadge}</td>
+                        <td class="p-3 font-medium ${log.lateMinutes > 0 ? 'text-rose-600' : 'text-slate-400'}">${log.lateMinutes > 0 ? log.lateMinutes + ' mins' : '-'}</td>
+                        <td class="p-3">${noteBtn}</td>
+                        <td class="p-3 text-right">
+                            <button onclick="deleteLogEntry(${log.id})" class="text-slate-300 hover:text-rose-600 transition-colors px-1" title="Delete Record">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+
+            calculateStats();
+        }
+
+        function calculateStats() {
+            let presentCount = 0, lateCount = 0, permCount = 0, totalMins = 0;
+
+            attendanceLogs.forEach(log => {
+                if (log.status === 'Present') presentCount++;
+                if (log.status === 'Late') { lateCount++; totalMins += log.lateMinutes; }
+                if (log.status === 'Permission') permCount++;
+            });
+
+            document.getElementById('statPresent').textContent = presentCount;
+            document.getElementById('statLate').textContent = lateCount;
+            document.getElementById('statPermission').textContent = permCount;
+            document.getElementById('statMinutes').textContent = totalMins + "m";
+        }
+
+        function deleteLogEntry(id) {
+            attendanceLogs = attendanceLogs.filter(log => log.id !== id);
+            localStorage.setItem('camattend_db', JSON.stringify(attendanceLogs));
+            renderLedger();
+            showToast("Log entry removed");
+        }
+
+        function openNoteModal(emp, date, note) {
+            document.getElementById('noteModalSub').textContent = `${emp} — ${date}`;
+            document.getElementById('noteModalContent').textContent = note;
+            document.getElementById('noteModal').classList.remove('hidden');
+        }
+
+        function closeNoteModal() {
+            document.getElementById('noteModal').classList.add('hidden');
+        }
+
+        function openPayrollModal() {
+            calculatePayrollDeductions();
+            document.getElementById('payrollModal').classList.remove('hidden');
+        }
+
+        function closePayrollModal() {
+            document.getElementById('payrollModal').classList.add('hidden');
+        }
+
+        function calculatePayrollDeductions() {
+            const penaltyType = document.getElementById('penaltyType').value;
+            const rate = parseFloat(document.getElementById('penaltyRate').value) || 0;
+            const tbody = document.getElementById('payrollTableBody');
+            tbody.innerHTML = '';
+
+            let staffStats = {};
+            employees.forEach(e => {
+                staffStats[e.name] = { lateCount: 0, totalMins: 0 };
+            });
+
+            attendanceLogs.forEach(log => {
+                if (log.status === 'Late') {
+                    if (!staffStats[log.employee]) staffStats[log.employee] = { lateCount: 0, totalMins: 0 };
+                    staffStats[log.employee].lateCount += 1;
+                    staffStats[log.employee].totalMins += log.lateMinutes;
+                }
+            });
+
+            let grandTotalDeduction = 0;
+
+            Object.keys(staffStats).forEach(staffName => {
+                const stat = staffStats[staffName];
+                let deduction = 0;
+
+                if (penaltyType === 'perMinute') {
+                    deduction = stat.totalMins * rate;
+                } else {
+                    deduction = stat.lateCount * rate;
+                }
+
+                grandTotalDeduction += deduction;
+
+                let row = `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-2.5 font-medium text-slate-800">${staffName}</td>
+                        <td class="p-2.5 font-mono">${stat.lateCount}</td>
+                        <td class="p-2.5 font-mono text-rose-600">${stat.totalMins} m</td>
+                        <td class="p-2.5 font-mono text-right font-bold text-slate-800">${deduction.toLocaleString()} XAF</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+
+            document.getElementById('totalPayrollDeduction').textContent = `${grandTotalDeduction.toLocaleString()} FCFA`;
+        }
+
+        function openHolidaysModal() {
+            document.getElementById('holidaysModal').classList.remove('hidden');
+        }
+
+        function closeHolidaysModal() {
+            document.getElementById('holidaysModal').classList.add('hidden');
+        }
+
+        function exportJSONBackup() {
+            const backupData = {
+                app: "CamAttend",
+                version: "2.0",
+                exportDate: new Date().toISOString(),
+                logs: JSON.parse(localStorage.getItem('camattend_db')) || [],
+                staff: JSON.parse(localStorage.getItem('camattend_staff')) || []
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const filename = `CamAttend_Backup_${new Date().toISOString().split('T')[0]}.json`;
+
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", filename);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast("JSON System backup exported");
+        }
+
+        function exportCSVData() {
+            const logs = JSON.parse(localStorage.getItem('camattend_db')) || [];
+            if (logs.length === 0) {
+                showToast("No attendance records to export", true);
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Date,Employee,Time In,Permission,Status,Late Minutes,Note\n";
+
+            logs.forEach(log => {
+                const row = [
+                    `"${log.date}"`,
+                    `"${log.employee}"`,
+                    `"${log.timeIn}"`,
+                    `"${log.permission}"`,
+                    `"${log.status}"`,
+                    log.lateMinutes || 0,
+                    `"${(log.note || '').replace(/"/g, '""')}"`
+                ].join(",");
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `CamAttend_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            showToast("CSV Spreadsheet exported");
+        }
+
+        function importJSONBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+
+                    if (!importedData.logs) {
+                        showToast("Invalid JSON backup structure", true);
+                        return;
+                    }
+
+                    showConfirmModal(
+                        "Restore Backup File", 
+                        `Are you sure you want to restore ${importedData.logs.length} attendance records? This will overwrite current storage.`, 
+                        () => {
+                            localStorage.setItem('camattend_db', JSON.stringify(importedData.logs));
+                            attendanceLogs = importedData.logs;
+
+                            if (importedData.staff && importedData.staff.length > 0) {
+                                localStorage.setItem('camattend_staff', JSON.stringify(importedData.staff));
+                                employees = importedData.staff;
+                                populateEmployeeDropdown();
+                            }
+
+                            renderLedger();
+                            showToast("Backup restored successfully!");
+                        }
+                    );
+                } catch (error) {
+                    showToast("Error parsing backup JSON file", true);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function confirmClearData() {
+            showConfirmModal(
+                "Wipe System Data", 
+                "Are you sure you want to delete all attendance logs? This action cannot be reversed unless you have a JSON backup.",
+                () => {
+                    attendanceLogs = [];
+                    localStorage.removeItem('camattend_db');
+                    renderLedger();
+                    showToast("All logs cleared");
+                }
+            );
+        }
+
+        function showConfirmModal(title, msg, onConfirm) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = msg;
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            
+            const newBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+
+            newBtn.onclick = () => {
+                onConfirm();
+                closeConfirmModal();
+            };
+
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+        }
+
+        function shareToWhatsApp() {
+            if (attendanceLogs.length === 0) {
+                showToast("No logs available to export today.", true);
+                return;
+            }
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            let totalPresent = 0, totalLate = 0, totalPerm = 0;
+            let lateDetails = "";
+
+            attendanceLogs.forEach(log => {
+                if (log.date === todayStr) {
+                    if (log.status === 'Present') totalPresent++;
+                    if (log.status === 'Permission') totalPerm++;
+                    if (log.status === 'Late') {
+                        totalLate++;
+                        lateDetails += `\n- ${log.employee}: Late by ${log.lateMinutes} mins (Arrived at ${log.timeIn})`;
+                    }
+                }
+            });
+
+            let textMessage = `*🇨🇲 CamAttend - Daily Office Summary*\n📅 Date: ${todayStr}\n\n`;
+            textMessage += `🟢 Present Today: ${totalPresent}\n`;
+            textMessage += `🟡 Late Today: ${totalLate}\n`;
+            textMessage += `🔵 Approved Permissions: ${totalPerm}\n`;
+
+            if (totalLate > 0) {
+                textMessage += `\n*Lateness Exceptions:*${lateDetails}`;
+            } else {
+                textMessage += `\n✨ Great job! Everyone was on time today.`;
+            }
+
+            const encodedText = encodeURIComponent(textMessage);
+            window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+        }
+
+        function openStaffModal() {
+            renderStaffList();
+            document.getElementById('staffModal').classList.remove('hidden');
+        }
+
+        function closeStaffModal() {
+            document.getElementById('staffModal').classList.add('hidden');
+        }
+
+        function renderStaffList() {
+            const container = document.getElementById('staffListContainer');
+            container.innerHTML = '';
+
+            employees.forEach(emp => {
+                const item = `
+                    <div class="p-2.5 flex justify-between items-center text-xs bg-white">
+                        <div>
+                            <span class="font-semibold text-slate-800">${emp.name}</span>
+                            <span class="text-slate-400 ml-1">(${emp.dept || 'General'})</span>
+                        </div>
+                        <button onclick="removeStaff(${emp.id})" class="text-slate-300 hover:text-rose-600 transition-colors">
+                            <i class="fa-solid fa-user-minus"></i>
+                        </button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', item);
+            });
+        }
+
+        function handleAddStaff(e) {
+            e.preventDefault();
+            const name = document.getElementById('newStaffName').value;
+            const dept = document.getElementById('newStaffDept').value;
+
+            const newEmp = { id: Date.now(), name, dept };
+            employees.push(newEmp);
+            localStorage.setItem('camattend_staff', JSON.stringify(employees));
+
+            document.getElementById('newStaffName').value = '';
+            document.getElementById('newStaffDept').value = '';
+
+            populateEmployeeDropdown();
+            renderStaffList();
+            showToast(`${name} added to staff directory`);
+        }
+
+        function removeStaff(id) {
+            employees = employees.filter(emp => emp.id !== id);
+            localStorage.setItem('camattend_staff', JSON.stringify(employees));
+            populateEmployeeDropdown();
+            renderStaffList();
+            showToast("Employee removed");
+        }
+
+        // STEP 3: SERVICE WORKER REGISTRATION (Linking External sw.js)
+        function registerPWA() {
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js')
+                        .then(() => console.log('Service Worker Registered Successfully'))
+                        .catch((err) => console.log('SW Registration Failed:', err));
+                });
+            }
+        }
+    </script>
+</body>
+</html>
